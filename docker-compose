@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:latest
+    container_name: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: phpmyadmin
+    restart: always
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: ${MYSQL_USER}
+      PMA_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "${PHPMYADMIN_PORT}:80"
+
+  emqx:
+    image: emqx/emqx:latest
+    container_name: emqx
+    restart: always
+    environment:
+      - EMQX_DEFAULT_USER=${EMQX_DEFAULT_USER}
+      - EMQX_DEFAULT_PASS=${EMQX_DEFAULT_PASS}
+      - EMQX_LOADED_PLUGINS="emqx_auth_mysql"
+    ports:
+      - "${EMQX_PORT}:1883"  # MQTT sin TLS
+      - "8883:8883"          # MQTT con TLS
+      - "8083:8083"          # WebSocket sin TLS
+      - "8084:8084"          # WebSocket con TLS
+      - "18083:18083"        # Dashboard de EMQX
+      - "4369:4369"          # EPMD
+      - "5369:5369"          # Comunicación entre nodos
+      - "11883:11883"        # Puerto MQTT interno
+    volumes:
+      - ./emqx_auth.conf:/etc/emqx/etc/plugins/emqx_auth_mysql.conf
+    depends_on:
+      - mysql
+
+  nodered:
+    image: nodered/node-red:latest
+    container_name: nodered
+    restart: always
+    ports:
+      - "${NODE_RED_PORT}:1880"
+    volumes:
+      - nodered_data:/data
+
+  thingsboard:
+    image: thingsboard/tb-postgres:latest
+    container_name: thingsboard
+    restart: always
+    environment:
+      TB_POSTGRES_HOST: postgres
+      TB_POSTGRES_PORT: 5432
+      TB_POSTGRES_DB: ${MYSQL_DATABASE}
+      TB_POSTGRES_USER: ${MYSQL_USER}
+      TB_POSTGRES_PASSWORD: ${MYSQL_PASSWORD}
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${MYSQL_DATABASE}
+      POSTGRES_USER: ${MYSQL_USER}
+      POSTGRES_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  homeassistant:
+    image: homeassistant/home-assistant:latest
+    container_name: homeassistant
+    restart: always
+    volumes:
+      - ./homeassistant:/config
+    ports:
+      - "8123:8123"
+    depends_on:
+      - mysql
+      - emqx
+
+volumes:
+  mysql_data:
+  postgres_data:
+  nodered_data:
